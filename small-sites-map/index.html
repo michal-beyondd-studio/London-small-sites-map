@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>London Small Sites Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; width: 100%; }
+    .popup-img { margin-top: 5px; border-radius: 6px; }
+    .popup-title { font-weight: bold; font-size: 14px; }
+    .popup-subtitle { font-size: 12px; color: #555; margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // 1. Create map
+    var map = L.map('map').setView([51.509, -0.118], 10);
+
+    // 2. Base layer
+    var cartoLight = L.tileLayer(
+      'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}{r}.png',
+      {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/">OSM</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }
+    ).addTo(map);
+
+    // 3. Layer control
+    var overlays = {};
+    var layerControl = L.control.layers({ "Carto Light": cartoLight }, overlays).addTo(map);
+
+    // 4. Define custom marker icons
+    var greenIcon = new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+      shadowUrl: 'https://unpkg.com/leaflet/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    var blueIcon = new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+      shadowUrl: 'https://unpkg.com/leaflet/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    // 5. General GeoJSON loader
+    function addGeoJSON(path, name, color, useMarker = false, customIcon = null, showStreetView = false) {
+      fetch(path)
+        .then(res => res.json())
+        .then(data => {
+          var layer = L.geoJSON(data, {
+            style: { color: color, weight: 1, fillColor: color, fillOpacity: 0.4 },
+            pointToLayer: function (feature, latlng) {
+              if (useMarker) {
+                return L.marker(latlng, { icon: customIcon });
+              } else {
+                return L.circleMarker(latlng, {
+                  radius: 6,
+                  fillColor: color,
+                  color: 'white',
+                  weight: 1,
+                  fillOpacity: 0.9
+                });
+              }
+            },
+            onEachFeature: function (feature, layer) {
+              let props = feature.properties || {};
+              let popupContent = "";
+
+              if (props.name) {
+                popupContent += `<div class="popup-title">${props.name}</div>`;
+              }
+              if (props.description) {
+                popupContent += `<div class="popup-subtitle">${props.description}</div>`;
+              }
+              if (props.ImageURL) {
+                popupContent += `<img src="${props.ImageURL}" width="200" class="popup-img"><br>`;
+              }
+
+              // Street View only for Potential Sites
+              if (showStreetView && feature.geometry && feature.geometry.type === "Point") {
+                let coords = feature.geometry.coordinates;
+                let lon = coords[0];
+                let lat = coords[1];
+                let streetViewURL = `https://www.google.com/maps?q=&layer=c&cbll=${lat},${lon}`;
+                let thumbnailURL = `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${lat},${lon}`;
+                popupContent += `<a href="${streetViewURL}" target="_blank">
+                                   <img src="${thumbnailURL}" width="200" class="popup-img">
+                                 </a>`;
+              }
+
+              layer.bindPopup(popupContent);
+            }
+          });
+
+          overlays[name] = layer;
+          layer.addTo(map);
+          layerControl.addOverlay(layer, name);
+          console.log(`✅ Loaded layer: ${name}`);
+        })
+        .catch(err => console.error(`❌ Failed to load ${name} (${path}):`, err));
+    }
+
+    // 6. Add datasets
+    addGeoJSON('London_Boroughs export.geojson', 'London Boroughs', '#444');
+    addGeoJSON('Ealing export.geojson', 'Ealing Highlight', 'blue');
+    addGeoJSON('elizabeth line export.geojson', 'Elizabeth Line', '#800080');
+    addGeoJSON('Elizabeth_Line_Stations export.geojson', 'Elizabeth Line Stations', '#800080');
+    addGeoJSON('route_subway_London_grouped export.geojson', 'Tube Lines', '#d9534f');
+    addGeoJSON('Underground_Stations export.geojson', 'Underground Stations', 'red');
+
+    // Small Homes → green markers
+    addGeoJSON('Small homes export.geojson', 'Small Homes', '#2ca25f', true, greenIcon);
+
+    // Potential Sites → blue markers + Street View
+    addGeoJSON('potential site export.geojson', 'Potential Sites', '#08519c', true, blueIcon, true);
+
+  </script>
+</body>
+</html>
