@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>London Small Sites Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    #map { height: 100vh; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script>
+    // 1. Create map
+    var map = L.map('map').setView([51.509, -0.118], 10);
+
+    // 2. Base layer: Carto Light
+    var baseLayer = L.tileLayer(
+      'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}{r}.png',
+      {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/">OSM</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }
+    ).addTo(map);
+
+    // 3. Layer control
+    var overlays = {};
+    var layerControl = L.control.layers({ "Carto Light": baseLayer }, overlays).addTo(map);
+
+    // 4. Universal GeoJSON loader with popup support
+    function addGeoJSON(path, name, styleOptions, isClickable = false) {
+      fetch(path)
+        .then(res => res.json())
+        .then(data => {
+          var layer = L.geoJSON(data, {
+            ...styleOptions,
+            onEachFeature: function (feature, layer) {
+              if (isClickable) {
+                let props = feature.properties;
+                let popupContent = `<b>${props.Name || 'Unnamed'}</b><br>
+                                    ${props.Address || ''}<br>`;
+
+                if (props.ImageURL) {
+                  popupContent += `<img src="${props.ImageURL}" width="200"><br>`;
+                }
+
+                if (feature.geometry && feature.geometry.type === "Point") {
+                  let coords = feature.geometry.coordinates;
+                  let lon = coords[0];
+                  let lat = coords[1];
+
+                  // Street View thumbnail + link
+                  let thumbnailURL = `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${lat},${lon}`;
+                  let streetViewURL = `https://www.google.com/maps?q=&layer=c&cbll=${lat},${lon}`;
+
+                  popupContent += `<a href="${streetViewURL}" target="_blank">
+                                     <img src="${thumbnailURL}" width="200" style="margin-top:5px;">
+                                   </a>`;
+                }
+
+                layer.bindPopup(popupContent);
+              }
+            }
+          });
+
+          overlays[name] = layer;
+          layer.addTo(map);
+          layerControl.addOverlay(layer, name);
+        });
+    }
+
+    // 5. Add your clickable layers
+    addGeoJSON('SmallHomes.geojson', 'Small Homes', { 
+      pointToLayer: (f, latlng) => L.circleMarker(latlng, { 
+        radius: 6, fillColor: '#2ca25f', color: 'white', weight: 1, fillOpacity: 0.9 
+      }) 
+    }, true);
+
+    addGeoJSON('PotentialSites.geojson', 'Potential Sites', { 
+      pointToLayer: (f, latlng) => L.circleMarker(latlng, { 
+        radius: 6, fillColor: '#ff7f00', color: 'white', weight: 1, fillOpacity: 0.9 
+      }) 
+    }, true);
+
+    // 6. (Optional) Add boroughs/wards, tube lines, etc. the same way
+    // Example:
+    // addGeoJSON('boroughs.geojson', 'Boroughs', { style: { color: '#444', weight: 1, fillOpacity: 0.1 } });
+
+  </script>
+</body>
+</html>
